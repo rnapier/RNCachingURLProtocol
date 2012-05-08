@@ -45,12 +45,15 @@
 //
 // A quick rundown of how to use it:
 //
-// 1. At some point early in the program (application:didFinishLaunchingWithOptions:),
+// 1. To build, you will need the Reachability code from Apple (included). That requires that you link with
+//    `SystemConfiguration.framework`.
+//
+// 2. At some point early in the program (application:didFinishLaunchingWithOptions:),
 //    call the following:
 //
-//       [NSURLProtocol registerClass:[RNCachingURLProtocol class]];
+//      `[NSURLProtocol registerClass:[RNCachingURLProtocol class]];`
 //
-// 2. There is no step 2.
+// 3. There is no step 3.
 //
 // For more details see
 //    [Drop-in offline caching for UIWebView (and NSURLProtocol)](http://robnapier.net/blog/offline-uiwebview-nsurlprotocol-588).
