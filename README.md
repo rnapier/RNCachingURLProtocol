@@ -1,7 +1,7 @@
 # BACKGROUND
 
 RNCachingURLProtocol is a simple shim for the HTTP protocol (that’s not
-nearly as scary as it sounds). Anytime a URL is download, the response is
+nearly as scary as it sounds). Anytime a URL is downloaded, the response is
 cached to disk. Anytime a URL is requested, if we’re online then things
 proceed normally. If we’re offline, then we retrieve the cached version.
 
