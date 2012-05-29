@@ -31,9 +31,12 @@
 @interface RNCachedData : NSObject <NSCoding>
 @property (nonatomic, readwrite, strong) NSData *data;
 @property (nonatomic, readwrite, strong) NSURLResponse *response;
+@property (nonatomic, readwrite, strong) NSURLRequest *redirectRequest;
 @end
 
 static NSString *RNCachingURLHeader = @"X-RNCache";
+static NSString *RNCachingURLRedirectableHeader = @"X-RNCache-Redirectable";
+static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 
 @interface RNCachingURLProtocol () // <NSURLConnectionDelegate, NSURLConnectionDataDelegate> iOS5-only
 @property (nonatomic, readwrite, strong) NSURLRequest *request;
@@ -52,8 +55,10 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request
 {
-  if ([[[request URL] scheme] isEqualToString:@"http"] &&
-      [request valueForHTTPHeaderField:RNCachingURLHeader] == nil) {
+  if (([[[request URL] scheme] isEqualToString:@"http"] &&
+       [request valueForHTTPHeaderField:RNCachingURLHeader] == nil) ||
+         ([request valueForHTTPHeaderField:RNCachingURLRedirectableHeader] &&
+          ([request valueForHTTPHeaderField:RNCachingURLRedirectedHeader] == nil))) {
     return YES;
   }
   return NO;
@@ -71,6 +76,10 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
   // Modify request so we don't loop
   NSMutableURLRequest *myRequest = [request mutableCopy];
   [myRequest setValue:@"" forHTTPHeaderField:RNCachingURLHeader];
+    
+  if ([myRequest valueForHTTPHeaderField:RNCachingURLRedirectableHeader]) {
+    [myRequest setValue:@"" forHTTPHeaderField:RNCachingURLRedirectedHeader];
+  }
 
   self = [super initWithRequest:myRequest
                  cachedResponse:cachedResponse
@@ -102,9 +111,14 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
     if (cache) {
       NSData *data = [cache data];
       NSURLResponse *response = [cache response];
-      [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageAllowed];
-      [[self client] URLProtocol:self didLoadData:data];
-      [[self client] URLProtocolDidFinishLoading:self];
+      NSURLRequest *redirectRequest = [cache redirectRequest];
+      if (redirectRequest) {
+        [[self client] URLProtocol:self wasRedirectedToRequest:[cache redirectRequest] redirectResponse:[cache response]];
+      } else {
+        [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageAllowed];
+        [[self client] URLProtocol:self didLoadData:data];
+        [[self client] URLProtocolDidFinishLoading:self];
+      }
     }
     else {
       [[self client] URLProtocol:self didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCannotConnectToHost userInfo:nil]];
@@ -121,11 +135,20 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 - (NSURLRequest *)connection:(NSURLConnection *)connection willSendRequest:(NSURLRequest *)request redirectResponse:(NSURLResponse *)response
 {
+  NSMutableURLRequest *redirectableRequest = [request mutableCopy];  
   // Thanks to Nick Dowell https://gist.github.com/1885821
   if (response != nil) {
-    [[self client] URLProtocol:self wasRedirectedToRequest:request redirectResponse:response];
+    [redirectableRequest setValue:@"" 
+               forHTTPHeaderField:RNCachingURLRedirectableHeader];
+    NSString *cachePath = [self cachePathForRequest:[self request]];
+    RNCachedData *cache = [RNCachedData new];
+    [cache setResponse:response];
+    [cache setData:[self data]];
+    [cache setRedirectRequest:redirectableRequest];
+    [NSKeyedArchiver archiveRootObject:cache toFile:cachePath];
+    [[self client] URLProtocol:self wasRedirectedToRequest:redirectableRequest redirectResponse:response];
   }
-  return request;
+  return redirectableRequest;
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
@@ -175,15 +198,18 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 static NSString *const kDataKey = @"data";
 static NSString *const kResponseKey = @"response";
+static NSString *const kRedirectRequestKey = @"redirectRequest";
 
 @implementation RNCachedData
 @synthesize data = data_;
 @synthesize response = response_;
+@synthesize redirectRequest = redirectRequest_;
 
 - (void)encodeWithCoder:(NSCoder *)aCoder
 {
   [aCoder encodeObject:[self data] forKey:kDataKey];
   [aCoder encodeObject:[self response] forKey:kResponseKey];
+  [aCoder encodeObject:[self redirectRequest] forKey:kRedirectRequestKey];
 }
 
 - (id)initWithCoder:(NSCoder *)aDecoder
@@ -192,6 +218,7 @@ static NSString *const kResponseKey = @"response";
   if (self != nil) {
     [self setData:[aDecoder decodeObjectForKey:kDataKey]];
     [self setResponse:[aDecoder decodeObjectForKey:kResponseKey]];
+    [self setRedirectRequest:[aDecoder decodeObjectForKey:kRedirectRequestKey]];
   }
 
   return self;
