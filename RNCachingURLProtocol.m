@@ -28,6 +28,12 @@
 #import "RNCachingURLProtocol.h"
 #import "Reachability.h"
 
+@interface NSURLRequest(MutableCopyWorkaround)
+
+- (id) mutableCopyWorkaround;
+
+@end
+
 @interface RNCachedData : NSObject <NSCoding>
 @property (nonatomic, readwrite, strong) NSData *data;
 @property (nonatomic, readwrite, strong) NSURLResponse *response;
@@ -35,11 +41,8 @@
 @end
 
 static NSString *RNCachingURLHeader = @"X-RNCache";
-static NSString *RNCachingURLRedirectableHeader = @"X-RNCache-Redirectable";
-static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 
 @interface RNCachingURLProtocol () // <NSURLConnectionDelegate, NSURLConnectionDataDelegate> iOS5-only
-@property (nonatomic, readwrite, strong) NSURLRequest *request;
 @property (nonatomic, readwrite, strong) NSURLConnection *connection;
 @property (nonatomic, readwrite, strong) NSMutableData *data;
 @property (nonatomic, readwrite, strong) NSURLResponse *response;
@@ -47,7 +50,6 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 @end
 
 @implementation RNCachingURLProtocol
-@synthesize request = request_;
 @synthesize connection = connection_;
 @synthesize data = data_;
 @synthesize response = response_;
@@ -55,10 +57,8 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request
 {
-  if (([[[request URL] scheme] isEqualToString:@"http"] &&
-       [request valueForHTTPHeaderField:RNCachingURLHeader] == nil) ||
-         ([request valueForHTTPHeaderField:RNCachingURLRedirectableHeader] &&
-          ([request valueForHTTPHeaderField:RNCachingURLRedirectedHeader] == nil))) {
+  if ([[[request URL] scheme] isEqualToString:@"http"] &&
+      ([request valueForHTTPHeaderField:RNCachingURLHeader] == nil)) {
     return YES;
   }
   return NO;
@@ -67,28 +67,6 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 + (NSURLRequest *)canonicalRequestForRequest:(NSURLRequest *)request
 {
   return request;
-}
-
-- (id)initWithRequest:(NSURLRequest *)request
-       cachedResponse:(NSCachedURLResponse *)cachedResponse
-               client:(id <NSURLProtocolClient>)client
-{
-  // Modify request so we don't loop
-  NSMutableURLRequest *myRequest = [request mutableCopy];
-  [myRequest setValue:@"" forHTTPHeaderField:RNCachingURLHeader];
-    
-  if ([myRequest valueForHTTPHeaderField:RNCachingURLRedirectableHeader]) {
-    [myRequest setValue:@"" forHTTPHeaderField:RNCachingURLRedirectedHeader];
-  }
-
-  self = [super initWithRequest:myRequest
-                 cachedResponse:cachedResponse
-                         client:client];
-
-  if (self) {
-    [self setRequest:myRequest];
-  }
-  return self;
 }
 
 - (NSString *)cachePathForRequest:(NSURLRequest *)aRequest
@@ -102,7 +80,9 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 - (void)startLoading
 {
   if ([[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable) {
-    NSURLConnection *connection = [NSURLConnection connectionWithRequest:[self request]
+    NSMutableURLRequest *connectionRequest = [[self request] mutableCopyWorkaround];
+    [connectionRequest setValue:@"" forHTTPHeaderField:RNCachingURLHeader];
+    NSURLConnection *connection = [NSURLConnection connectionWithRequest:connectionRequest
                                                                 delegate:self];
     [self setConnection:connection];
   }
@@ -135,11 +115,13 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 
 - (NSURLRequest *)connection:(NSURLConnection *)connection willSendRequest:(NSURLRequest *)request redirectResponse:(NSURLResponse *)response
 {
-  NSMutableURLRequest *redirectableRequest = [request mutableCopy];  
-  // Thanks to Nick Dowell https://gist.github.com/1885821
+// Thanks to Nick Dowell https://gist.github.com/1885821
   if (response != nil) {
-    [redirectableRequest setValue:@"" 
-               forHTTPHeaderField:RNCachingURLRedirectableHeader];
+    NSMutableURLRequest *redirectableRequest = [request mutableCopyWorkaround];
+    NSMutableDictionary *redirectableRequestAllHTTPHeaderFields = [[redirectableRequest allHTTPHeaderFields] mutableCopy];
+    [redirectableRequestAllHTTPHeaderFields removeObjectForKey:RNCachingURLHeader];
+    [redirectableRequest setAllHTTPHeaderFields:redirectableRequestAllHTTPHeaderFields];
+
     NSString *cachePath = [self cachePathForRequest:[self request]];
     RNCachedData *cache = [RNCachedData new];
     [cache setResponse:response];
@@ -147,8 +129,10 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
     [cache setRedirectRequest:redirectableRequest];
     [NSKeyedArchiver archiveRootObject:cache toFile:cachePath];
     [[self client] URLProtocol:self wasRedirectedToRequest:redirectableRequest redirectResponse:response];
+    return redirectableRequest;
+  } else {
+    return request;
   }
-  return redirectableRequest;
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
@@ -162,6 +146,7 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
   [[self client] URLProtocol:self didFailWithError:error];
   [self setConnection:nil];
   [self setData:nil];
+  [self setResponse:nil];
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
@@ -182,12 +167,13 @@ static NSString *RNCachingURLRedirectedHeader = @"X-RNCache-Redirected";
 
   [self setConnection:nil];
   [self setData:nil];
+  [self setResponse:nil];
 }
 
 - (void)appendData:(NSData *)newData
 {
   if ([self data] == nil) {
-    [self setData:[[NSMutableData alloc] initWithData:newData]];
+    [self setData:[newData mutableCopy]];
   }
   else {
     [[self data] appendData:newData];
@@ -222,6 +208,18 @@ static NSString *const kRedirectRequestKey = @"redirectRequest";
   }
 
   return self;
+}
+
+@end
+
+@implementation NSURLRequest(MutableCopyWorkaround)
+
+- (id) mutableCopyWorkaround {
+    NSMutableURLRequest *mutableURLRequest = [[NSMutableURLRequest alloc] initWithURL:[self URL]
+                                                                          cachePolicy:[self cachePolicy]
+                                                                      timeoutInterval:[self timeoutInterval]];
+    [mutableURLRequest setAllHTTPHeaderFields:[self allHTTPHeaderFields]];
+    return mutableURLRequest;
 }
 
 @end
