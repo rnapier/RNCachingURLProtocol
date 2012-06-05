@@ -28,6 +28,8 @@
 #import "RNCachingURLProtocol.h"
 #import "Reachability.h"
 
+#define SHOW_LEAK 0
+
 @interface NSURLRequest(MutableCopyWorkaround)
 
 - (id) mutableCopyWorkaround;
@@ -80,7 +82,12 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 - (void)startLoading
 {
   if ([[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable) {
-    NSMutableURLRequest *connectionRequest = [[self request] mutableCopyWorkaround];
+    NSMutableURLRequest *connectionRequest = 
+#if SHOW_LEAK
+      [[self request] mutableCopy];
+#else
+      [[self request] mutableCopyWorkaround];
+#endif
     [connectionRequest setValue:@"" forHTTPHeaderField:RNCachingURLHeader];
     NSURLConnection *connection = [NSURLConnection connectionWithRequest:connectionRequest
                                                                 delegate:self];
@@ -117,7 +124,12 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 {
 // Thanks to Nick Dowell https://gist.github.com/1885821
   if (response != nil) {
-    NSMutableURLRequest *redirectableRequest = [request mutableCopyWorkaround];
+      NSMutableURLRequest *redirectableRequest =
+#if SHOW_LEAK
+      [request mutableCopy];
+#else
+      [request mutableCopyWorkaround];
+#endif
     NSMutableDictionary *redirectableRequestAllHTTPHeaderFields = [[redirectableRequest allHTTPHeaderFields] mutableCopy];
     [redirectableRequestAllHTTPHeaderFields removeObjectForKey:RNCachingURLHeader];
     [redirectableRequest setAllHTTPHeaderFields:redirectableRequestAllHTTPHeaderFields];
