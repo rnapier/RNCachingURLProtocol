@@ -28,13 +28,16 @@
 #import "RNCachingURLProtocol.h"
 #import "Reachability.h"
 
-#define SHOW_LEAK 0
+#define WORKAROUND_MUTABLE_COPY_LEAK 1
 
+#if WORKAROUND_MUTABLE_COPY_LEAK
+// required to workaround http://openradar.appspot.com/11596316
 @interface NSURLRequest(MutableCopyWorkaround)
 
 - (id) mutableCopyWorkaround;
 
 @end
+#endif
 
 @interface RNCachedData : NSObject <NSCoding>
 @property (nonatomic, readwrite, strong) NSData *data;
@@ -59,6 +62,7 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request
 {
+  // only handle http requests we haven't marked with our header.
   if ([[[request URL] scheme] isEqualToString:@"http"] &&
       ([request valueForHTTPHeaderField:RNCachingURLHeader] == nil)) {
     return YES;
@@ -83,11 +87,12 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 {
   if ([[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable) {
     NSMutableURLRequest *connectionRequest = 
-#if SHOW_LEAK
-      [[self request] mutableCopy];
-#else
+#if WORKAROUND_MUTABLE_COPY_LEAK
       [[self request] mutableCopyWorkaround];
+#else
+      [[self request] mutableCopy];
 #endif
+    // we need to mark this request with our header so we know not to handle it in +[NSURLProtocol canInitWithRequest:].
     [connectionRequest setValue:@"" forHTTPHeaderField:RNCachingURLHeader];
     NSURLConnection *connection = [NSURLConnection connectionWithRequest:connectionRequest
                                                                 delegate:self];
@@ -125,12 +130,17 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 // Thanks to Nick Dowell https://gist.github.com/1885821
   if (response != nil) {
       NSMutableURLRequest *redirectableRequest =
-#if SHOW_LEAK
-      [request mutableCopy];
-#else
+#if WORKAROUND_MUTABLE_COPY_LEAK
       [request mutableCopyWorkaround];
+#else
+      [request mutableCopy];
 #endif
     NSMutableDictionary *redirectableRequestAllHTTPHeaderFields = [[redirectableRequest allHTTPHeaderFields] mutableCopy];
+    // We need to remove our header so we know to handle this request and cache it.
+    // There are 3 requests in flight: the outside request, which we handled, the internal request,
+    // which we marked with our header, and the redirectableRequest, which we're modifying here.
+    // The redirectable request will cause a new outside request from the NSURLProtocolClient, which 
+    // must not be marked with our header.
     [redirectableRequestAllHTTPHeaderFields removeObjectForKey:RNCachingURLHeader];
     [redirectableRequest setAllHTTPHeaderFields:redirectableRequestAllHTTPHeaderFields];
 
@@ -224,6 +234,7 @@ static NSString *const kRedirectRequestKey = @"redirectRequest";
 
 @end
 
+#if WORKAROUND_MUTABLE_COPY_LEAK
 @implementation NSURLRequest(MutableCopyWorkaround)
 
 - (id) mutableCopyWorkaround {
@@ -235,3 +246,4 @@ static NSString *const kRedirectRequestKey = @"redirectRequest";
 }
 
 @end
+#endif
