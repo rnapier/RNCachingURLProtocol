@@ -105,9 +105,10 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
       NSURLResponse *response = [cache response];
       NSURLRequest *redirectRequest = [cache redirectRequest];
       if (redirectRequest) {
-        [[self client] URLProtocol:self wasRedirectedToRequest:[cache redirectRequest] redirectResponse:[cache response]];
+        [[self client] URLProtocol:self wasRedirectedToRequest:redirectRequest redirectResponse:response];
       } else {
-        [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageAllowed];
+          
+        [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed]; // we handle caching ourselves.
         [[self client] URLProtocol:self didLoadData:data];
         [[self client] URLProtocolDidFinishLoading:self];
       }
@@ -135,14 +136,12 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 #else
       [request mutableCopy];
 #endif
-    NSMutableDictionary *redirectableRequestAllHTTPHeaderFields = [[redirectableRequest allHTTPHeaderFields] mutableCopy];
     // We need to remove our header so we know to handle this request and cache it.
     // There are 3 requests in flight: the outside request, which we handled, the internal request,
     // which we marked with our header, and the redirectableRequest, which we're modifying here.
     // The redirectable request will cause a new outside request from the NSURLProtocolClient, which 
     // must not be marked with our header.
-    [redirectableRequestAllHTTPHeaderFields removeObjectForKey:RNCachingURLHeader];
-    [redirectableRequest setAllHTTPHeaderFields:redirectableRequestAllHTTPHeaderFields];
+    [redirectableRequest setValue:nil forHTTPHeaderField:RNCachingURLHeader];
 
     NSString *cachePath = [self cachePathForRequest:[self request]];
     RNCachedData *cache = [RNCachedData new];
