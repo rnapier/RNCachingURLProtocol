@@ -64,4 +64,6 @@
 
 - (NSString *)cachePathForRequest:(NSURLRequest *)aRequest;
 
+- (BOOL) useCache;
+
 @end

@@ -84,7 +84,7 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 - (void)startLoading
 {
-  if ([[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable) {
+  if (![self useCache]) {
     NSMutableURLRequest *connectionRequest = 
 #if WORKAROUND_MUTABLE_COPY_LEAK
       [[self request] mutableCopyWorkaround];
@@ -188,6 +188,12 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
   [self setConnection:nil];
   [self setData:nil];
   [self setResponse:nil];
+}
+
+- (BOOL) useCache 
+{
+    BOOL reachable = (BOOL) [[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable;
+    return !reachable;
 }
 
 - (void)appendData:(NSData *)newData
