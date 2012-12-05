@@ -27,6 +27,7 @@
 
 #import "RNCachingURLProtocol.h"
 #import "Reachability.h"
+#import "NSString+Sha1.h"
 
 #define WORKAROUND_MUTABLE_COPY_LEAK 1
 
@@ -79,7 +80,9 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 {
   // This stores in the Caches directory, which can be deleted when space is low, but we only use it for offline access
   NSString *cachesPath = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) lastObject];
-  return [cachesPath stringByAppendingPathComponent:[NSString stringWithFormat:@"%x", [[[aRequest URL] absoluteString] hash]]];
+  NSString *fileName = [[[aRequest URL] absoluteString] sha1];
+
+  return [cachesPath stringByAppendingPathComponent:fileName];
 }
 
 - (void)startLoading
