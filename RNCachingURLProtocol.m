@@ -54,17 +54,33 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 - (void)appendData:(NSData *)newData;
 @end
 
+static NSObject *RNCachingSupportedSchemesMonitor;
+static NSSet *RNCachingSupportedSchemes;
+
 @implementation RNCachingURLProtocol
 @synthesize connection = connection_;
 @synthesize data = data_;
 @synthesize response = response_;
 
++ (void)initialize
+{
+  if (self == [RNCachingURLProtocol class])
+  {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      RNCachingSupportedSchemesMonitor = [NSObject new];
+    });
+        
+    [self setSupportedSchemes:[NSSet setWithObject:@"http"]];
+  }
+}
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request
 {
   // only handle http requests we haven't marked with our header.
-  if ([[[request URL] scheme] isEqualToString:@"http"] &&
-      ([request valueForHTTPHeaderField:RNCachingURLHeader] == nil)) {
+  if ([[self supportedSchemes] containsObject:[[request URL] scheme]] &&
+      ([request valueForHTTPHeaderField:RNCachingURLHeader] == nil))
+  {
     return YES;
   }
   return NO;
@@ -203,6 +219,23 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
   }
   else {
     [[self data] appendData:newData];
+  }
+}
+
++ (NSSet *)supportedSchemes {
+  NSSet *supportedSchemes;
+  @synchronized(RNCachingSupportedSchemesMonitor)
+  {
+    supportedSchemes = RNCachingSupportedSchemes;
+  }
+  return supportedSchemes;
+}
+
++ (void)setSupportedSchemes:(NSSet *)supportedSchemes
+{
+  @synchronized(RNCachingSupportedSchemesMonitor)
+  {
+    RNCachingSupportedSchemes = supportedSchemes;
   }
 }
 
