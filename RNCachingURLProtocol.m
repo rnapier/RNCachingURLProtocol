@@ -28,6 +28,21 @@
 #import "RNCachingURLProtocol.h"
 #import "Reachability.h"
 
+NSString *RNCachingURLProtocolWillStartRequestNotification = @"RNCachingURLProtocolWillStartRequestNotification";
+NSString *RNCachingURLProtocolWillReceiveResponseNotification = @"RNCachingURLProtocolWillReceiveResponseNotification";
+NSString *RNCachingURLProtocolWillFailWithErrorNotification = @"RNCachingURLProtocolWillFailWithErrorNotification";
+NSString *RNCachingURLProtocolWillRedirectNotification = @"RNCachingURLProtocolWillRedirectNotification";
+NSString *RNCachingURLProtocolWillReceiveDataNotification = @"RNCachingURLProtocolWillReceiveDataNotification";
+NSString *RNCachingURLProtocolWillFinishNotification = @"RNCachingURLProtocolWillFinishNotification";
+NSString *RNCachingURLProtocolWillStopNotification = @"RNCachingURLProtocolWillStopNotification";
+
+NSString *RNCachingURLProtocolRequestKey = @"RNCachingURLProtocolRequest";
+NSString *RNCachingURLProtocolRedirectRequestKey = @"RNCachingURLProtocolRedirectRequest";
+NSString *RNCachingURLProtocolResponseKey = @"RNCachingURLProtocolResponse";
+NSString *RNCachingURLProtocolErrorKey = @"RNCachingURLProtocolError";
+NSString *RNCachingURLProtocolDataChunkKey = @"RNCachingURLProtocolDataChunk";
+NSString *RNCachingURLProtocolEnabledKey = @"RNCachingURLProtocolEnabled";
+
 #define WORKAROUND_MUTABLE_COPY_LEAK 1
 
 #if WORKAROUND_MUTABLE_COPY_LEAK
@@ -51,14 +66,29 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 @property (nonatomic, readwrite, strong) NSURLConnection *connection;
 @property (nonatomic, readwrite, strong) NSMutableData *data;
 @property (nonatomic, readwrite, strong) NSURLResponse *response;
+@property (nonatomic) BOOL enabled;
 - (void)appendData:(NSData *)newData;
 @end
+
+static NSObject *RNCachingURLProtocolEnabledMonitor;
+static BOOL RNCachingURLProtocolEnabled;
 
 @implementation RNCachingURLProtocol
 @synthesize connection = connection_;
 @synthesize data = data_;
 @synthesize response = response_;
 
++ (void)initialize
+{
+  if (self == [RNCachingURLProtocol class])
+  {
+      static dispatch_once_t onceToken;
+      dispatch_once(&onceToken, ^{
+          RNCachingURLProtocolEnabledMonitor = [NSObject new];
+      });
+      [self setEnabled:YES];
+  }
+}
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request
 {
@@ -84,7 +114,9 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 - (void)startLoading
 {
-  if (![self useCache]) {
+  [self setEnabled:[[self class] enabled]];
+  if (![self enabled] || ![self useCache])
+  {
     NSMutableURLRequest *connectionRequest = 
 #if WORKAROUND_MUTABLE_COPY_LEAK
       [[self request] mutableCopyWorkaround];
@@ -93,26 +125,30 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 #endif
     // we need to mark this request with our header so we know not to handle it in +[NSURLProtocol canInitWithRequest:].
     [connectionRequest setValue:@"" forHTTPHeaderField:RNCachingURLHeader];
+    [self postNotificationOnMainQueueNamed:RNCachingURLProtocolWillStartRequestNotification withUserInfo:[self requestResponseEnabledUserInfo]];
     NSURLConnection *connection = [NSURLConnection connectionWithRequest:connectionRequest
                                                                 delegate:self];
     [self setConnection:connection];
   }
-  else {
+  else
+  {
     RNCachedData *cache = [NSKeyedUnarchiver unarchiveObjectWithFile:[self cachePathForRequest:[self request]]];
     if (cache) {
       NSData *data = [cache data];
       NSURLResponse *response = [cache response];
       NSURLRequest *redirectRequest = [cache redirectRequest];
-      if (redirectRequest) {
+      if (redirectRequest)
+      {
         [[self client] URLProtocol:self wasRedirectedToRequest:redirectRequest redirectResponse:response];
-      } else {
-          
+      } else
+      {    
         [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed]; // we handle caching ourselves.
         [[self client] URLProtocol:self didLoadData:data];
         [[self client] URLProtocolDidFinishLoading:self];
       }
     }
-    else {
+    else
+    {
       [[self client] URLProtocol:self didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCannotConnectToHost userInfo:nil]];
     }
   }
@@ -120,6 +156,7 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 - (void)stopLoading
 {
+  [self postNotificationOnMainQueueNamed:RNCachingURLProtocolWillStopNotification withUserInfo:[self requestResponseEnabledUserInfo]];
   [[self connection] cancel];
 }
 
@@ -142,12 +179,19 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
     // must not be marked with our header.
     [redirectableRequest setValue:nil forHTTPHeaderField:RNCachingURLHeader];
 
-    NSString *cachePath = [self cachePathForRequest:[self request]];
-    RNCachedData *cache = [RNCachedData new];
-    [cache setResponse:response];
-    [cache setData:[self data]];
-    [cache setRedirectRequest:redirectableRequest];
-    [NSKeyedArchiver archiveRootObject:cache toFile:cachePath];
+    if ([self enabled])
+    {
+      NSString *cachePath = [self cachePathForRequest:[self request]];
+      RNCachedData *cache = [RNCachedData new];
+      [cache setResponse:response];
+      [cache setData:[self data]];
+      [cache setRedirectRequest:redirectableRequest];
+      [NSKeyedArchiver archiveRootObject:cache toFile:cachePath];
+    }
+    NSMutableDictionary *userInfo = [self requestResponseEnabledUserInfo];
+    [userInfo setObject:redirectableRequest forKey:RNCachingURLProtocolRedirectRequestKey];
+    [userInfo setObject:response forKey:RNCachingURLProtocolResponseKey];
+    [self postNotificationOnMainQueueNamed:RNCachingURLProtocolWillRedirectNotification withUserInfo:userInfo];
     [[self client] URLProtocol:self wasRedirectedToRequest:redirectableRequest redirectResponse:response];
     return redirectableRequest;
   } else {
@@ -157,12 +201,23 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
 {
+  NSMutableDictionary *userInfo = [self requestResponseEnabledUserInfo];
+  [userInfo setObject:data forKey:RNCachingURLProtocolDataChunkKey];
+  [self postNotificationOnMainQueueNamed:RNCachingURLProtocolWillReceiveDataNotification withUserInfo:userInfo];
   [[self client] URLProtocol:self didLoadData:data];
-  [self appendData:data];
+  if ([self enabled])
+  {
+    [self appendData:data];
+  }
 }
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
 {
+  NSMutableDictionary *userInfo = [self requestResponseEnabledUserInfo];
+  [userInfo setValue:error
+              forKey:RNCachingURLProtocolErrorKey];
+
+  [self postNotificationOnMainQueueNamed:RNCachingURLProtocolWillFailWithErrorNotification withUserInfo:userInfo];
   [[self client] URLProtocol:self didFailWithError:error];
   [self setConnection:nil];
   [self setData:nil];
@@ -172,19 +227,30 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
   [self setResponse:response];
-  [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];  // We cache ourselves.
+  [self postNotificationOnMainQueueNamed:RNCachingURLProtocolWillReceiveResponseNotification withUserInfo:[self requestResponseEnabledUserInfo]];
+  if ([self enabled])
+  {
+    [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];  // We cache ourselves.
+  }
+  else
+  {
+    [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:[[self request] cachePolicy]];
+  }
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection
 {
+  [self postNotificationOnMainQueueNamed:RNCachingURLProtocolWillFinishNotification withUserInfo:[self requestResponseEnabledUserInfo]];
   [[self client] URLProtocolDidFinishLoading:self];
 
-  NSString *cachePath = [self cachePathForRequest:[self request]];
-  RNCachedData *cache = [RNCachedData new];
-  [cache setResponse:[self response]];
-  [cache setData:[self data]];
-  [NSKeyedArchiver archiveRootObject:cache toFile:cachePath];
-
+  if ([self enabled])
+  {
+    NSString *cachePath = [self cachePathForRequest:[self request]];
+    RNCachedData *cache = [RNCachedData new];
+    [cache setResponse:[self response]];
+    [cache setData:[self data]];
+    [NSKeyedArchiver archiveRootObject:cache toFile:cachePath];
+  }
   [self setConnection:nil];
   [self setData:nil];
   [self setResponse:nil];
@@ -192,18 +258,61 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 - (BOOL) useCache 
 {
-    BOOL reachable = (BOOL) [[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable;
-    return !reachable;
+  BOOL reachable = (BOOL) [[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable;
+  return !reachable;
 }
 
 - (void)appendData:(NSData *)newData
 {
-  if ([self data] == nil) {
+  if ([self data] == nil)
+  {
     [self setData:[newData mutableCopy]];
   }
   else {
     [[self data] appendData:newData];
   }
+}
+
++ (BOOL)enabled
+{
+  BOOL enabled;
+  @synchronized(RNCachingURLProtocolEnabledMonitor)
+  {
+    enabled = RNCachingURLProtocolEnabled;
+  }
+  return enabled;
+}
+
++ (void)setEnabled:(BOOL)enabled
+{
+  @synchronized(RNCachingURLProtocolEnabledMonitor)
+  {
+    RNCachingURLProtocolEnabled = enabled;
+  }
+}
+
+- (NSMutableDictionary *)requestResponseEnabledUserInfo
+{
+    NSMutableDictionary *userInfo = [(@{
+                                      RNCachingURLProtocolRequestKey : [self request],
+                                      RNCachingURLProtocolEnabledKey : [NSNumber numberWithBool:[self enabled]],
+                                      }) mutableCopy];
+    if ([self response])
+    {
+        [userInfo setObject:[self response]
+                     forKey:RNCachingURLProtocolResponseKey];
+    }
+    
+    return userInfo;
+}
+
+- (void)postNotificationOnMainQueueNamed:(NSString *)notificationName withUserInfo:(NSDictionary *)userInfo
+{
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [[NSNotificationCenter defaultCenter] postNotificationName:notificationName
+                                                        object:self
+                                                      userInfo:userInfo];
+  });
 }
 
 @end

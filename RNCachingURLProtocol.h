@@ -60,7 +60,25 @@
 
 #import <Foundation/Foundation.h>
 
+extern NSString *RNCachingURLProtocolWillStartRequestNotification;
+extern NSString *RNCachingURLProtocolWillReceiveResponseNotification;
+extern NSString *RNCachingURLProtocolWillFailWithErrorNotification;
+extern NSString *RNCachingURLProtocolWillRedirectNotification;
+extern NSString *RNCachingURLProtocolWillReceiveDataNotification;
+extern NSString *RNCachingURLProtocolWillFinishNotification;
+extern NSString *RNCachingURLProtocolWillStopNotification;
+
+extern NSString *RNCachingURLProtocolRequestKey; // NSURLRequest
+extern NSString *RNCachingURLProtocolRedirectRequestKey; // NSURLRequest
+extern NSString *RNCachingURLProtocolResponseKey; // NSURLResponse
+extern NSString *RNCachingURLProtocolErrorKey; // NSError
+extern NSString *RNCachingURLProtocolDataChunkKey; // NSData
+extern NSString *RNCachingURLProtocolEnabledKey; // NSNumber (BOOL)
+
 @interface RNCachingURLProtocol : NSURLProtocol
+
++ (BOOL)enabled;
++ (void)setEnabled:(BOOL)enabled;
 
 - (NSString *)cachePathForRequest:(NSURLRequest *)aRequest;
 - (BOOL) useCache;
