@@ -65,7 +65,10 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
   // only handle http requests we haven't marked with our header.
   if ([[[request URL] scheme] isEqualToString:@"http"] &&
       ([request valueForHTTPHeaderField:RNCachingURLHeader] == nil)) {
-    return YES;
+      NSString *method = [request HTTPMethod];
+      if ([method isEqualToString:@"GET"]) {
+          return YES;
+      }
   }
   return NO;
 }
