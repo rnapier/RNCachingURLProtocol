@@ -246,6 +246,13 @@ static NSString *const kRedirectRequestKey = @"redirectRequest";
                                                                           cachePolicy:[self cachePolicy]
                                                                       timeoutInterval:[self timeoutInterval]];
     [mutableURLRequest setAllHTTPHeaderFields:[self allHTTPHeaderFields]];
+    if ([self HTTPBodyStream]) {
+        [mutableURLRequest setHTTPBodyStream:[self HTTPBodyStream]];
+    } else {
+        [mutableURLRequest setHTTPBody:[self HTTPBody]];
+    }
+    [mutableURLRequest setHTTPMethod:[self HTTPMethod];
+    
     return mutableURLRequest;
 }
 
