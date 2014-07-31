@@ -62,8 +62,9 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request
 {
-  // only handle http requests we haven't marked with our header.
-  if ([[[request URL] scheme] isEqualToString:@"http"] &&
+  // only handle http GET requests we haven't marked with our header.
+  if ([request.HTTPMethod isEqualToString:@"GET"] &&
+      [[[request URL] scheme] isEqualToString:@"http"] &&
       ([request valueForHTTPHeaderField:RNCachingURLHeader] == nil)) {
     return YES;
   }
@@ -85,7 +86,7 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
 - (void)startLoading
 {
   if (![self useCache]) {
-    NSMutableURLRequest *connectionRequest = 
+    NSMutableURLRequest *connectionRequest =
 #if WORKAROUND_MUTABLE_COPY_LEAK
       [[self request] mutableCopyWorkaround];
 #else
@@ -106,7 +107,7 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
       if (redirectRequest) {
         [[self client] URLProtocol:self wasRedirectedToRequest:redirectRequest redirectResponse:response];
       } else {
-          
+
         [[self client] URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed]; // we handle caching ourselves.
         [[self client] URLProtocol:self didLoadData:data];
         [[self client] URLProtocolDidFinishLoading:self];
@@ -138,7 +139,7 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
     // We need to remove our header so we know to handle this request and cache it.
     // There are 3 requests in flight: the outside request, which we handled, the internal request,
     // which we marked with our header, and the redirectableRequest, which we're modifying here.
-    // The redirectable request will cause a new outside request from the NSURLProtocolClient, which 
+    // The redirectable request will cause a new outside request from the NSURLProtocolClient, which
     // must not be marked with our header.
     [redirectableRequest setValue:nil forHTTPHeaderField:RNCachingURLHeader];
 
@@ -190,7 +191,7 @@ static NSString *RNCachingURLHeader = @"X-RNCache";
   [self setResponse:nil];
 }
 
-- (BOOL) useCache 
+- (BOOL) useCache
 {
     BOOL reachable = (BOOL) [[Reachability reachabilityWithHostName:[[[self request] URL] host]] currentReachabilityStatus] != NotReachable;
     return !reachable;
