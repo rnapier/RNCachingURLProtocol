@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C800AAE8166E77B20027E1E5 /* NSString+Sha1.m in Sources */ = {isa = PBXBuildFile; fileRef = C800AAE7166E77B20027E1E5 /* NSString+Sha1.m */; };
 		FB237ECE14D5B86100F30AD8 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB237ECD14D5B86100F30AD8 /* UIKit.framework */; };
 		FB237ED014D5B86100F30AD8 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB237ECF14D5B86100F30AD8 /* Foundation.framework */; };
 		FB237ED214D5B86100F30AD8 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB237ED114D5B86100F30AD8 /* CoreGraphics.framework */; };
@@ -22,6 +23,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C800AAE6166E77B20027E1E5 /* NSString+Sha1.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSString+Sha1.h"; sourceTree = "<group>"; };
+		C800AAE7166E77B20027E1E5 /* NSString+Sha1.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSString+Sha1.m"; sourceTree = "<group>"; };
 		FB237EC914D5B86100F30AD8 /* CachedWebView.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CachedWebView.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB237ECD14D5B86100F30AD8 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		FB237ECF14D5B86100F30AD8 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
@@ -61,6 +64,8 @@
 		FB237EBE14D5B86100F30AD8 = {
 			isa = PBXGroup;
 			children = (
+				C800AAE6166E77B20027E1E5 /* NSString+Sha1.h */,
+				C800AAE7166E77B20027E1E5 /* NSString+Sha1.m */,
 				FB39D08214D5BB1F002A6D1A /* README.md */,
 				FB237EEA14D5B87400F30AD8 /* RNCachingURLProtocol.h */,
 				FB237EEB14D5B87400F30AD8 /* RNCachingURLProtocol.m */,
@@ -183,6 +188,7 @@
 				FB237EDA14D5B86100F30AD8 /* main.m in Sources */,
 				FB237EDE14D5B86100F30AD8 /* AppDelegate.m in Sources */,
 				FB237EE114D5B86100F30AD8 /* ViewController.m in Sources */,
+				C800AAE8166E77B20027E1E5 /* NSString+Sha1.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
