@@ -287,7 +287,7 @@ static NSString *const kRedirectRequestKey = @"redirectRequest";
     } else {
         [mutableURLRequest setHTTPBody:[self HTTPBody]];
     }
-    [mutableURLRequest setHTTPMethod:[self HTTPMethod];
+    [mutableURLRequest setHTTPMethod:[self HTTPMethod]];
     
     return mutableURLRequest;
 }
