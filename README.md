@@ -33,6 +33,18 @@ RNCachingURLProtocol.
 For more details see
    [Drop-in offline caching for UIWebView (and NSURLProtocol)](http://robnapier.net/blog/offline-uiwebview-nsurlprotocol-588).
 
+#Note
+Per Default Only HTTP(s) GET Requests are cached offline.
+
+Set shouldHandleRequest block to change this to either allow only certain hostnames, ports or whatever you like!
+
+e.g.
+
+    //only cache CNN
+    [RNCachingURLProtocol setShouldHandleRequest:^BOOL(NSURLRequest * _Nonnull aRequest) {
+        return [aRequest.URL.host isEqualToString:@"www.cnn.com"];
+    }];
+
 # EXAMPLE
 
 See the CachedWebView project for example usage.

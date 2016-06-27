@@ -33,18 +33,41 @@
 
 @implementation AppDelegate
 
-@synthesize window = _window;
-@synthesize viewController = _viewController;
-
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-  [NSURLProtocol registerClass:[RNCachingURLProtocol class]];
-
-  self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
-  self.viewController = [[ViewController alloc] initWithNibName:@"ViewController" bundle:nil];
-  self.window.rootViewController = self.viewController;
-  [self.window makeKeyAndVisible];
-  return YES;
+    //only cache Steam
+    [RNCachingURLProtocol setShouldHandleRequest:^BOOL(NSURLRequest * _Nonnull aRequest) {
+        if(!aRequest.URL.host) {
+            return NO;
+        }
+        
+        BOOL br = [aRequest.URL.host rangeOfString:@"steamcommunity.com"].location != NSNotFound;
+        if(br) {
+            NSLog(@"cache %@", aRequest.URL.host);
+        }
+        return br;
+    }];
+    
+    //set our protocol
+    [NSURLProtocol registerClass:[RNCachingURLProtocol class]];
+    
+    //prepare the content vcs
+    ViewController *viewController = [[ViewController alloc] initWithNibName:@"ViewController" bundle:nil];
+    viewController.url = [NSURL URLWithString:@"http://steamcommunity.com"];
+    viewController.title = @"cached Steamcommunity";
+    ViewController *viewController2 = [[ViewController alloc] initWithNibName:@"ViewController" bundle:nil];
+    viewController2.url = [NSURL URLWithString:@"http://www.spiegel.de"];
+    viewController2.title = @"uncached Spiegel";
+    
+    //add tabbar
+    self.viewController = [[UITabBarController alloc] init];
+    self.viewController.viewControllers = @[viewController, viewController2];
+    
+    //add the window
+    self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+    self.window.rootViewController = self.viewController;
+    [self.window makeKeyAndVisible];
+    return YES;
 }
 
 @end
