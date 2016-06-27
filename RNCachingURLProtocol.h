@@ -57,15 +57,24 @@
 //
 // For more details see
 //    [Drop-in offline caching for UIWebView (and NSURLProtocol)](http://robnapier.net/blog/offline-uiwebview-nsurlprotocol-588).
+//
+// Per Default Only HTTP(s) GET Requests are cached offline.
+// Set shouldHandleRequest block to change this to either allow only certain hostnames, ports or whatever you like!
 
 #import <Foundation/Foundation.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
+typedef BOOL (^RNCachingURLProtocolBlock)(NSURLRequest *aRequest);
+
 @interface RNCachingURLProtocol : NSURLProtocol
 
-+ (NSSet *)supportedSchemes;
-+ (void)setSupportedSchemes:(NSSet *)supportedSchemes;
++(RNCachingURLProtocolBlock)shouldHandleRequest;
++ (void)setShouldHandleRequest:(RNCachingURLProtocolBlock)shouldHandleRequest;
 
 - (NSString *)cachePathForRequest:(NSURLRequest *)aRequest;
 - (BOOL) useCache;
 
 @end
+
+NS_ASSUME_NONNULL_END

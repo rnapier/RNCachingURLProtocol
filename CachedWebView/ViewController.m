@@ -29,16 +29,26 @@
 #import "ViewController.h"
 
 @interface ViewController ()
-
+@property (strong, nonatomic) IBOutlet UIWebView *webView;
 @end
 
 @implementation ViewController
-@synthesize webView = webView_;
 
 - (void)viewDidLoad
 {
-  [super viewDidLoad];
-  [self.webView loadRequest:[[NSURLRequest alloc] initWithURL:[NSURL URLWithString:@"http://cnn.com"]]];
+    [super viewDidLoad];
+    
+    id url = self.url;
+    if(url) {
+        [self.webView loadRequest:[[NSURLRequest alloc] initWithURL:url]];
+    }
 }
 
+- (void)setUrl:(NSURL *)url {
+    _url = url;
+    
+    if(self.isViewLoaded) {
+        [self.webView loadRequest:[[NSURLRequest alloc] initWithURL:url]];
+    }
+}
 @end
