@@ -31,7 +31,7 @@ RNCachingURLProtocol.
 3. There is no step 3.
 
 For more details see
-   [Drop-in offline caching for UIWebView (and NSURLProtocol)](http://robnapier.net/blog/offline-uiwebview-nsurlprotocol-588).
+   [Drop-in offline caching for UIWebView (and NSURLProtocol)](https://robnapier.net/offline-uiwebview-nsurlprotocol).
 
 # EXAMPLE
 
